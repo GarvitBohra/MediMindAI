@@ -59,18 +59,27 @@ export default async function handler(req, res) {
       config: { responseMimeType: 'application/json', maxOutputTokens: 16000 },
     })
 
+    const raw = String(text)
     let report
     try {
-      // Models sometimes wrap JSON in ```json fences even when asked not to
-      report = JSON.parse(String(text).replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, ''))
+      // Models sometimes add ```json fences or trailing text: parse only the outermost {...}
+      report = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1))
     } catch {
-      console.error('report: model did not return valid JSON. Start of reply:', String(text).slice(0, 300), '... length', String(text).length)
-      return res.status(502).json({ error: 'Could not read the report. Please try another PDF.' })
+      console.error('report: model did not return valid JSON. Start of reply:', raw.slice(0, 300), '... length', raw.length)
+      return res.status(502).json({ error: 'Could not read the report (it may be too long or unreadable). Please try a shorter or clearer PDF.' })
     }
-    // Keep only well-formed numeric rows
-    const parameters = (Array.isArray(report.parameters) ? report.parameters : []).filter(
-      (p) => p && typeof p.name === 'string' && typeof p.value === 'number',
-    )
+    // Keep only well-formed numeric rows and coerce every field to the type the page expects
+    const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+    const parameters = (Array.isArray(report.parameters) ? report.parameters : [])
+      .filter((p) => p && typeof p.name === 'string' && num(p.value) !== null)
+      .map((p) => ({
+        name: p.name,
+        value: p.value,
+        unit: typeof p.unit === 'string' ? p.unit : '',
+        ref_low: num(p.ref_low),
+        ref_high: num(p.ref_high),
+        explanation: typeof p.explanation === 'string' ? p.explanation : '',
+      }))
     return res.status(200).json({
       title: String(report.title || 'Medical report').slice(0, 120),
       parameters,

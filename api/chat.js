@@ -15,7 +15,7 @@ Limits: you cannot examine the user, so do not give a definitive diagnosis and d
 If the user describes possible emergency symptoms (chest pain, trouble breathing, stroke signs, severe bleeding, fainting, thoughts of self-harm), tell them to contact local emergency services immediately.
 Keep answers clear and well organised, under about 200 words, and end with a one-line reminder to confirm important decisions with their doctor.`
 
-const TRENDS_PROMPT = `Task: explain the trends in the readings below. For each metric that has data (heart rate, blood pressure, blood sugar, weight), say whether it is rising, falling or stable and whether any value is outside the usual adult range. Mention likely everyday influences, give 2-3 practical suggestions, and say when to see a doctor. Use short bullet points, under 180 words. If there are fewer than 3 readings, say the trend is not clear yet.`
+const TRENDS_PROMPT = `Task: explain the trends in the readings below. For each metric that has data (heart rate, blood pressure, blood sugar, weight), say whether it is rising, falling or stable and whether any value is outside the usual adult range. Mention likely everyday influences, give 2-3 practical suggestions, and say when to see a doctor. Use short bullet points, under 180 words (this replaces the length limit above). If there are fewer than 3 readings, say the trend is not clear yet.`
 
 // Local model (LM Studio, Ollama, etc.): any server that speaks the OpenAI chat API.
 // Only used when OPENAI_BASE_URL is a real http(s) URL, e.g. http://localhost:1234/v1

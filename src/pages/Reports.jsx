@@ -105,9 +105,12 @@ export default function Reports() {
       const report = await analyzeReport(file)
       setCurrent(report)
       // user_id is filled by the database default (auth.uid())
-      const { error } = await supabase.from('reports').insert(report)
+      const { data: row, error } = await supabase.from('reports').insert(report).select().single()
       if (error) setError(`Analysed, but could not save: ${error.message}`)
-      else loadSaved()
+      else {
+        setCurrent(row) // now has an id, so deleting the saved copy also clears it from the screen
+        loadSaved()
+      }
     } catch (err) {
       setError(err.message)
     }

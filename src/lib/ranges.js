@@ -30,7 +30,7 @@ export function bloodSugarStatus(mgdl) {
 
 // BMI = kg / m^2, using the standard adult WHO categories.
 export function calculateBmi(weightKg, heightCm) {
-  if (!weightKg || !heightCm) return null
+  if (!(weightKg > 0) || !(heightCm > 0)) return null
   return weightKg / (heightCm / 100) ** 2
 }
 

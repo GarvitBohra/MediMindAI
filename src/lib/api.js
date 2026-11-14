@@ -27,7 +27,7 @@ const MAX_PDF_BYTES = 3 * 1024 * 1024
 
 // Sends a PDF to /api/report and returns { title, parameters, summary }.
 export async function analyzeReport(file) {
-  if (file.type !== 'application/pdf') throw new Error('Please choose a PDF file.')
+  if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) throw new Error('Please choose a PDF file.')
   if (file.size > MAX_PDF_BYTES) throw new Error('The PDF must be 3 MB or smaller.')
   const bytes = new Uint8Array(await file.arrayBuffer())
   let binary = ''

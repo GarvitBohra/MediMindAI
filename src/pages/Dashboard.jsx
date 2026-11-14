@@ -128,7 +128,7 @@ export default function Dashboard() {
             </div>
           </div>
           <p className="text-xs text-slate-500">
-            Status labels use general adult reference ranges for information only and are not a diagnosis.
+            Status labels use general adult reference ranges for information only and are not a diagnosis. Blood sugar ranges assume a fasting reading, so a value taken after a meal may be flagged higher than expected.
           </p>
         </>
       )}
