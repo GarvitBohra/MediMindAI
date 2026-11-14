@@ -35,4 +35,4 @@ MediMindAI: users log vitals (heart rate, blood pressure, weight), see trends, a
 
 - **Gemini model IDs go stale and big Flash models get 503 "high demand".** The default is `gemini-3.1-flash-lite`, overridable with `GEMINI_MODEL`. To see what a key can use, call `GET https://generativelanguage.googleapis.com/v1beta/models?key=...` and test with a short `generateContent` request. Don't guess model names from memory.
 - The `AI_Healthcare_chatbot` folder next to this repo is an older prototype (Supabase `patients` table, different env var names). Don't run its `schema.sql` against the same Supabase project. It creates a `patients` table and policy that will conflict.
-- Remote: https://github.com/GarvitBohra/MediMindAI.git (branch `main`). The app has not been deployed to Vercel yet.
+- Remote: https://github.com/GarvitBohra/MediMindAI.git (branch `main`). The app is deployed on Vercel from `main`. `OPENAI_BASE_URL` must not be set there (a deployment cannot reach `localhost`), and `GEMINI_API_KEY`, `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` must be set in the Vercel project settings.
