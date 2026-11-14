@@ -29,8 +29,10 @@ drop policy if exists "vitals: read own"    on public.vitals;
 drop policy if exists "vitals: insert own"  on public.vitals;
 drop policy if exists "messages: read own"  on public.messages;
 drop policy if exists "messages: insert own" on public.messages;
+drop policy if exists "messages: delete own" on public.messages;
 
 create policy "vitals: read own"    on public.vitals   for select using (auth.uid() = user_id);
 create policy "vitals: insert own"  on public.vitals   for insert with check (auth.uid() = user_id);
 create policy "messages: read own"  on public.messages for select using (auth.uid() = user_id);
 create policy "messages: insert own" on public.messages for insert with check (auth.uid() = user_id);
+create policy "messages: delete own" on public.messages for delete using (auth.uid() = user_id);

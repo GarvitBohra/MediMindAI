@@ -4,10 +4,16 @@ import { GoogleGenAI } from '@google/genai'
 const MAX_MESSAGE_LENGTH = 500
 const MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite'
 
-const SYSTEM_PROMPT = `You are a health information assistant.
-Give general educational information only. Do not diagnose conditions or prescribe medication.
-If the user describes symptoms that could be an emergency (chest pain, trouble breathing, stroke signs, severe bleeding, thoughts of self-harm), tell them to contact local emergency services immediately.
-Keep answers short and clear. Remind users to consult a doctor for personal medical decisions.`
+const SYSTEM_PROMPT = `You are MediMind, an experienced virtual medical assistant with the knowledge of a physician and a warm, professional manner.
+Give practical, specific help, not generic disclaimers:
+- Interpret the user's readings against standard adult reference ranges and explain what they mean and any trend you can see.
+- Suggest evidence-based next steps: lifestyle changes (diet, sleep, exercise, stress, alcohol, salt), how to measure vitals accurately, what to monitor and for how long.
+- Explain conditions, tests, and medications in plain language, including common side effects and general safety points.
+- Suggest what kind of doctor to see, how urgent it is, and good questions to ask at the appointment.
+- Ask a brief clarifying question when symptoms or context are missing.
+Limits: you cannot examine the user, so do not give a definitive diagnosis and do not prescribe or give doses; say what is likely or possible and what a clinician should confirm.
+If the user describes possible emergency symptoms (chest pain, trouble breathing, stroke signs, severe bleeding, fainting, thoughts of self-harm), tell them to contact local emergency services immediately.
+Keep answers clear and well organised, under about 200 words, and end with a one-line reminder to confirm important decisions with their doctor.`
 
 // Local model (LM Studio, Ollama, etc.): any server that speaks the OpenAI chat API.
 // Only used when OPENAI_BASE_URL is a real http(s) URL, e.g. http://localhost:1234/v1
@@ -25,7 +31,7 @@ async function askLocalModel(system, turns) {
     body: JSON.stringify({
       model: process.env.OPENAI_MODEL,
       messages: [{ role: 'system', content: system }, ...turns],
-      max_tokens: 600,
+      max_tokens: 900,
       temperature: 0.4,
     }),
     signal: AbortSignal.timeout(120_000), // local models can be slow
@@ -48,7 +54,7 @@ async function askGemini(system, turns) {
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     })),
-    config: { systemInstruction: system, maxOutputTokens: 600 },
+    config: { systemInstruction: system, maxOutputTokens: 900 },
   }
   try {
     return (await ai.models.generateContent(request)).text
@@ -67,7 +73,7 @@ export default async function handler(req, res) {
   }
 
   // 1. Authenticate: the browser sends the Supabase access token
-  const token = (req.headers.authorization || '').replace('Bearer ', '')
+  const token = /^Bearer\s+(.+)$/i.exec(req.headers.authorization || '')?.[1]
   if (!token) return res.status(401).json({ error: 'Not logged in' })
 
   // 2. Validate input
@@ -86,12 +92,15 @@ export default async function handler(req, res) {
     if (authError || !userData?.user) return res.status(401).json({ error: 'Invalid session' })
 
     // 3. Load context: recent vitals and recent chat turns
-    const [{ data: vitals }, { data: history }] = await Promise.all([
+    const [{ data: vitals, error: vitalsError }, { data: history, error: historyError }] = await Promise.all([
       supabase.from('vitals').select('heart_rate, systolic, diastolic, weight, created_at')
         .order('created_at', { ascending: false }).limit(5),
       supabase.from('messages').select('role, content')
         .order('created_at', { ascending: false }).limit(6),
     ])
+
+    // Don't let the model answer from a false "no readings" context if a read failed
+    if (vitalsError || historyError) throw vitalsError || historyError
 
     const vitalsText = vitals?.length
       ? vitals.map((v) => `${v.created_at.slice(0, 10)}: HR ${v.heart_rate} bpm, BP ${v.systolic}/${v.diastolic}, weight ${v.weight} kg`).join('\n')
@@ -105,10 +114,11 @@ export default async function handler(req, res) {
     const reply = text || 'Sorry, I could not generate a response. Please try rephrasing.'
 
     // 5. Save both turns
-    await supabase.from('messages').insert([
+    const { error: saveError } = await supabase.from('messages').insert([
       { role: 'user', content: message },
       { role: 'assistant', content: reply },
     ])
+    if (saveError) console.error('failed to save messages:', saveError)
 
     return res.status(200).json({ reply })
   } catch (err) {

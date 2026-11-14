@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Bot, Send, TriangleAlert, User } from 'lucide-react'
+import { Bot, Send, Trash2, TriangleAlert, User } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 
 const MAX_LENGTH = 500
@@ -30,16 +30,28 @@ export default function ChatBox() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, busy])
 
+  async function clearChat() {
+    if (busy || messages.length === 0) return
+    if (!window.confirm('Clear the whole conversation? This cannot be undone.')) return
+    setError('')
+    // RLS limits the delete to the logged-in user's rows; the filter is required by Supabase
+    const { error } = await supabase.from('messages').delete().gt('id', 0)
+    if (error) setError(`Could not clear the chat: ${error.message}`)
+    else setMessages([])
+  }
+
   async function send(text) {
     const message = text.trim()
     if (!message || busy) return
     setBusy(true)
     setError('')
     setInput('')
-    setMessages((m) => [...m, { id: `tmp-${Date.now()}`, role: 'user', content: message }])
+    const tempId = `tmp-${crypto.randomUUID()}`
+    setMessages((m) => [...m, { id: tempId, role: 'user', content: message }])
 
-    const { data } = await supabase.auth.getSession()
     try {
+      const { data } = await supabase.auth.getSession()
+      if (!data.session) throw new Error('Your session has expired. Please log in again.')
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -48,10 +60,14 @@ export default function ChatBox() {
         },
         body: JSON.stringify({ message }),
       })
-      const body = await res.json()
-      if (!res.ok) throw new Error(body.error || 'Request failed')
-      setMessages((m) => [...m, { id: `bot-${Date.now()}`, role: 'assistant', content: body.reply }])
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`)
+      if (!body.reply) throw new Error('The assistant sent an empty reply. Please try again.')
+      setMessages((m) => [...m, { id: `bot-${crypto.randomUUID()}`, role: 'assistant', content: body.reply }])
     } catch (err) {
+      // Roll back the optimistic bubble and give the text back so it can be resent
+      setMessages((m) => m.filter((x) => x.id !== tempId))
+      setInput(message)
       setError(err.message)
     }
     setBusy(false)
@@ -63,10 +79,14 @@ export default function ChatBox() {
         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-600 text-white">
           <Bot className="h-5 w-5" aria-hidden="true" />
         </span>
-        <div>
+        <div className="flex-1">
           <p className="font-semibold text-slate-900">MediMind Assistant</p>
-          <p className="text-xs text-slate-500">General health information based on your readings</p>
+          <p className="text-xs text-slate-500">Medical guidance based on your readings</p>
         </div>
+        <button type="button" onClick={clearChat} disabled={busy || messages.length === 0}
+          className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-red-300 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40">
+          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Clear chat
+        </button>
       </div>
 
       <div className="flex items-start gap-2 border-b border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-800">
