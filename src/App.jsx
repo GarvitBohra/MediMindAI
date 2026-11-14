@@ -4,6 +4,7 @@ import Navbar from './components/Navbar.jsx'
 import Login from './pages/Login.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Chat from './pages/Chat.jsx'
+import Reports from './pages/Reports.jsx'
 
 function Protected({ children }) {
   const { session, loading } = useAuth()
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/login" element={session ? <Navigate to="/" replace /> : <Login />} />
           <Route path="/" element={<Protected><Dashboard /></Protected>} />
           <Route path="/chat" element={<Protected><Chat /></Protected>} />
+          <Route path="/reports" element={<Protected><Reports /></Protected>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

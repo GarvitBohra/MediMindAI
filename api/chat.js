@@ -15,6 +15,8 @@ Limits: you cannot examine the user, so do not give a definitive diagnosis and d
 If the user describes possible emergency symptoms (chest pain, trouble breathing, stroke signs, severe bleeding, fainting, thoughts of self-harm), tell them to contact local emergency services immediately.
 Keep answers clear and well organised, under about 200 words, and end with a one-line reminder to confirm important decisions with their doctor.`
 
+const TRENDS_PROMPT = `Task: explain the trends in the readings below. For each metric that has data (heart rate, blood pressure, blood sugar, weight), say whether it is rising, falling or stable and whether any value is outside the usual adult range. Mention likely everyday influences, give 2-3 practical suggestions, and say when to see a doctor. Use short bullet points, under 180 words. If there are fewer than 3 readings, say the trend is not clear yet.`
+
 // Local model (LM Studio, Ollama, etc.): any server that speaks the OpenAI chat API.
 // Only used when OPENAI_BASE_URL is a real http(s) URL, e.g. http://localhost:1234/v1
 const LOCAL_URL = /^https?:\/\//.test(process.env.OPENAI_BASE_URL || '')
@@ -77,7 +79,11 @@ export default async function handler(req, res) {
   if (!token) return res.status(401).json({ error: 'Not logged in' })
 
   // 2. Validate input
-  const message = typeof req.body?.message === 'string' ? req.body.message.trim() : ''
+  // mode 'trends': explain the user's recent readings. Reads more vitals and is not saved to the chat history.
+  const isTrends = req.body?.mode === 'trends'
+  const message = isTrends
+    ? 'Explain the trends in my recent readings.'
+    : typeof req.body?.message === 'string' ? req.body.message.trim() : ''
   if (!message) return res.status(400).json({ error: 'Message is required' })
   if (message.length > MAX_MESSAGE_LENGTH) {
     return res.status(400).json({ error: `Message must be ${MAX_MESSAGE_LENGTH} characters or fewer` })
@@ -93,32 +99,36 @@ export default async function handler(req, res) {
 
     // 3. Load context: recent vitals and recent chat turns
     const [{ data: vitals, error: vitalsError }, { data: history, error: historyError }] = await Promise.all([
-      supabase.from('vitals').select('heart_rate, systolic, diastolic, weight, created_at')
-        .order('created_at', { ascending: false }).limit(5),
-      supabase.from('messages').select('role, content')
-        .order('created_at', { ascending: false }).limit(6),
+      supabase.from('vitals').select('heart_rate, systolic, diastolic, weight, blood_sugar, created_at')
+        .order('created_at', { ascending: false }).limit(isTrends ? 30 : 5),
+      isTrends
+        ? { data: [] }
+        : supabase.from('messages').select('role, content').order('created_at', { ascending: false }).limit(6),
     ])
 
     // Don't let the model answer from a false "no readings" context if a read failed
     if (vitalsError || historyError) throw vitalsError || historyError
 
     const vitalsText = vitals?.length
-      ? vitals.map((v) => `${v.created_at.slice(0, 10)}: HR ${v.heart_rate} bpm, BP ${v.systolic}/${v.diastolic}, weight ${v.weight} kg`).join('\n')
+      ? vitals.map((v) => `${v.created_at.slice(0, 10)}: HR ${v.heart_rate} bpm, BP ${v.systolic}/${v.diastolic}, weight ${v.weight} kg${v.blood_sugar != null ? `, blood sugar ${v.blood_sugar} mg/dL` : ''}`).join('\n')
       : 'No readings recorded yet.'
 
-    const system = `${SYSTEM_PROMPT}\n\nThe user's latest readings:\n${vitalsText}`
+    const task = isTrends ? `\n\n${TRENDS_PROMPT}` : ''
+    const system = `${SYSTEM_PROMPT}${task}\n\nThe user's ${isTrends ? 'recent' : 'latest'} readings (newest first):\n${vitalsText}`
     const turns = [...(history || []).reverse(), { role: 'user', content: message }]
 
     // 4. Ask the model: a local OpenAI-compatible server (e.g. LM Studio) if configured, else Gemini
     const text = LOCAL_URL ? await askLocalModel(system, turns) : await askGemini(system, turns)
     const reply = text || 'Sorry, I could not generate a response. Please try rephrasing.'
 
-    // 5. Save both turns
-    const { error: saveError } = await supabase.from('messages').insert([
-      { role: 'user', content: message },
-      { role: 'assistant', content: reply },
-    ])
-    if (saveError) console.error('failed to save messages:', saveError)
+    // 5. Save both turns (trend explanations are not part of the conversation)
+    if (!isTrends) {
+      const { error: saveError } = await supabase.from('messages').insert([
+        { role: 'user', content: message },
+        { role: 'assistant', content: reply },
+      ])
+      if (saveError) console.error('failed to save messages:', saveError)
+    }
 
     return res.status(200).json({ reply })
   } catch (err) {

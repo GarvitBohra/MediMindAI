@@ -17,9 +17,11 @@ MediMindAI: users log vitals (heart rate, blood pressure, weight), see trends, a
 
 **Two data paths.** The browser talks to Supabase directly for auth and for reading/writing `vitals` and `messages`. Only chat goes through `/api/chat`, which holds the LLM credentials. Because of this, security depends on Row Level Security, not on the frontend.
 
-**RLS and `user_id`.** Both tables have `user_id uuid default auth.uid()` and policies `auth.uid() = user_id`. Inserts from the client intentionally omit `user_id`. There are no update or delete policies, so those are denied.
+**RLS and `user_id`.** Both tables have `user_id uuid default auth.uid()` and policies `auth.uid() = user_id`. Inserts from the client intentionally omit `user_id`. There are no update policies. Delete policies exist for `vitals`, `messages` and `reports`.
 
 **`api/chat.js` flow.** It reads the bearer token, validates the message (non-empty, max 500 chars), builds a Supabase client that forwards the user's token (so RLS applies to every query), verifies it with `auth.getUser`, loads the 5 latest vitals and 6 latest messages, calls the model, then saves both turns to `messages`. Errors are logged server-side and returned generically. A 503 or 429 from Gemini is retried once and then reported as "busy".
+
+**Reports.** `api/report.js` takes a base64 PDF (max 3 MB), sends it to Gemini as `inlineData`, and returns `{ title, parameters, summary }`. Gemini only: it does not work with the local `OPENAI_BASE_URL` path, and the model must accept PDFs. The `reports` table stores only the results (never the file). The out-of-range flag is decided in the browser by `flagValue` in [src/lib/ranges.js](src/lib/ranges.js), not by the model.
 
 **Model provider switch.** If `OPENAI_BASE_URL` is a real `http(s)` URL, the endpoint uses that OpenAI-compatible server (for example LM Studio) via `/chat/completions`. Otherwise it uses Gemini (`@google/genai`). The local path only works on a developer machine, because a Vercel deployment can't reach `localhost`.
 

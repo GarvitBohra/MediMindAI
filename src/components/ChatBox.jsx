@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Bot, Send, Trash2, TriangleAlert, User } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
+import { askAssistant } from '../lib/api.js'
 
 const MAX_LENGTH = 500
 
@@ -35,8 +36,9 @@ export default function ChatBox() {
     if (!window.confirm('Clear the whole conversation? This cannot be undone.')) return
     setError('')
     // RLS limits the delete to the logged-in user's rows; the filter is required by Supabase
-    const { error } = await supabase.from('messages').delete().gt('id', 0)
+    const { data, error } = await supabase.from('messages').delete().gt('id', 0).select('id')
     if (error) setError(`Could not clear the chat: ${error.message}`)
+    else if (!data?.length) setError('Nothing was deleted. Run the latest supabase/schema.sql in the Supabase SQL editor to add the delete policy.')
     else setMessages([])
   }
 
@@ -50,20 +52,8 @@ export default function ChatBox() {
     setMessages((m) => [...m, { id: tempId, role: 'user', content: message }])
 
     try {
-      const { data } = await supabase.auth.getSession()
-      if (!data.session) throw new Error('Your session has expired. Please log in again.')
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${data.session.access_token}`,
-        },
-        body: JSON.stringify({ message }),
-      })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`)
-      if (!body.reply) throw new Error('The assistant sent an empty reply. Please try again.')
-      setMessages((m) => [...m, { id: `bot-${crypto.randomUUID()}`, role: 'assistant', content: body.reply }])
+      const reply = await askAssistant({ message })
+      setMessages((m) => [...m, { id: `bot-${crypto.randomUUID()}`, role: 'assistant', content: reply }])
     } catch (err) {
       // Roll back the optimistic bubble and give the text back so it can be resent
       setMessages((m) => m.filter((x) => x.id !== tempId))

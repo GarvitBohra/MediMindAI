@@ -1,5 +1,5 @@
-import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, LogOut, MessageSquare } from 'lucide-react'
+import { Link, NavLink } from 'react-router-dom'
+import { FileText, LayoutDashboard, LogOut, MessageSquare } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from '../lib/AuthContext.jsx'
 import Logo from './Logo.jsx'
@@ -16,13 +16,18 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
-        <Logo />
+        <Link to="/" aria-label="MediMindAI dashboard" className="rounded-lg">
+          <Logo />
+        </Link>
         <nav className="ml-6 flex gap-1">
           <NavLink to="/" end className={link}>
             <LayoutDashboard className="h-4 w-4" aria-hidden="true" /> Dashboard
           </NavLink>
           <NavLink to="/chat" className={link}>
             <MessageSquare className="h-4 w-4" aria-hidden="true" /> Assistant
+          </NavLink>
+          <NavLink to="/reports" className={link}>
+            <FileText className="h-4 w-4" aria-hidden="true" /> Reports
           </NavLink>
         </nav>
         <div className="ml-auto flex items-center gap-3">
